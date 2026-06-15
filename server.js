@@ -308,7 +308,34 @@ app.get('/api/admin/orders', verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-app.patch('/api/admin/products/:id', verifyToken, isAdmin, async (req, res) => {
+app.patch('/api/admin/products/:id', verifyToken, isAdmin, async (req, res) => {app.patch('/api/admin/orders/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { status, payment_status } = req.body;
+    const result = await pool.query(
+      'UPDATE orders SET status = COALESCE($1, status), payment_status = COALESCE($2, payment_status), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
+      [status, payment_status, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Commande non trouvée' });
+
+    const order = result.rows[0];
+    if (status) {
+      await pool.query('INSERT INTO notifications (user_id, message) VALUES ($1, $2)', [order.user_id, `Commande ${order.order_number} - Statut: ${status}`]);
+    }
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/products', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM products ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+	
   try {
     const { price, stock } = req.body;
     const result = await pool.query(
