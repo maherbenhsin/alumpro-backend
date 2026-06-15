@@ -49,8 +49,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'API Running' });
 });
 
-// ═══════════════════════ INIT DATABASE (À SUPPRIMER APRÈS USAGE) ═══════════════════════
+// ═══════════════════════ INIT DATABASE (PROTÉGÉ) ═══════════════════════
 app.post('/api/init-db', async (req, res) => {
+  if (req.headers['x-init-secret'] !== process.env.INIT_SECRET) {
+    return res.status(403).json({ error: 'Accès refusé' });
+  }
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -127,8 +130,11 @@ app.post('/api/init-db', async (req, res) => {
 });
 
 
-// ═══════════════════════ INIT ADMIN ═══════════════════════
+// ═══════════════════════ INIT ADMIN (PROTÉGÉ) ═══════════════════════
 app.post('/api/init-admin', async (req, res) => {
+  if (req.headers['x-init-secret'] !== process.env.INIT_SECRET) {
+    return res.status(403).json({ error: 'Accès refusé' });
+  }
   try {
     const check = await pool.query('SELECT id FROM users WHERE email = $1', ['admin@alumpro.tn']);
     if (check.rows.length > 0) {
