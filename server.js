@@ -49,6 +49,84 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'API Running' });
 });
 
+// ═══════════════════════ INIT DATABASE (À SUPPRIMER APRÈS USAGE) ═══════════════════════
+app.post('/api/init-db', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        phone VARCHAR(20),
+        company VARCHAR(255),
+        address TEXT,
+        role VARCHAR(50) DEFAULT 'client',
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        reference VARCHAR(100) UNIQUE NOT NULL,
+        category VARCHAR(100),
+        price DECIMAL(10,2) NOT NULL,
+        unit VARCHAR(50),
+        icon VARCHAR(10),
+        stock INTEGER DEFAULT 0,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        order_number VARCHAR(100) UNIQUE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        total DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_status VARCHAR(50) DEFAULT 'unpaid',
+        shipping_address TEXT,
+        items JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+    `);
+
+    // Insère des produits de test si la table est vide
+    const check = await pool.query('SELECT COUNT(*) FROM products');
+    if (parseInt(check.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO products (name, reference, category, price, unit, icon, stock, description) VALUES
+        ('Profilé Carré 40×40', 'ALU-C4040', 'structure', 18.5, 'ml', '⬛', 50, 'Profilé carré standard'),
+        ('Profilé Carré 60×60', 'ALU-C6060', 'structure', 27.0, 'ml', '⬛', 35, 'Profilé carré renforcé'),
+        ('Profilé Plat 30×3', 'ALU-P3003', 'structure', 9.8, 'ml', '▬', 120, 'Profilé plat léger'),
+        ('Profilé Décoratif', 'ALU-DA-45', 'deco', 14.0, 'ml', '📐', 45, 'Angle décoratif'),
+        ('Kit Connecteur 90°', 'ACC-KIT90', 'accessoire', 12.5, 'lot', '🔩', 78, 'Lot de 4 connecteurs'),
+        ('Équerre Aluminium', 'ACC-EQ50', 'accessoire', 4.2, 'unité', '🔧', 200, 'Équerre standard');
+      `);
+    }
+
+    res.json({ message: '✅ Base de données initialisée avec succès' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // ═══════════════════════ INIT ADMIN ═══════════════════════
 app.post('/api/init-admin', async (req, res) => {
   try {
