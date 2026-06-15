@@ -121,6 +121,15 @@ app.post('/api/init-db', async (req, res) => {
         ('Equerre Aluminium', 'ACC-EQ50', 'accessoire', 4.2, 'unite', 'EQR', 200, 'Equerre standard');
       `);
     }
+// Migration: ajout colonnes produits enrichis
+    await pool.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(100);
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS colors TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS dimensions VARCHAR(255);
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS weight VARCHAR(100);
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS long_description TEXT;
+    `);
 
     res.json({ message: 'Base de donnees initialisee avec succes' });
   } catch (err) {
@@ -333,13 +342,51 @@ app.get('/api/admin/products', verifyToken, isAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Produit non trouve' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/products', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { name, reference, category, price, unit, icon, stock, description, brand, colors, image_url, dimensions, weight, long_description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO products (name, reference, category, price, unit, icon, stock, description, brand, colors, image_url, dimensions, weight, long_description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [name, reference, category, price, unit, icon || '📦', stock || 0, description, brand, colors, image_url, dimensions, weight, long_description]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.patch('/api/admin/products/:id', verifyToken, isAdmin, async (req, res) => {
   try {
-    const { price, stock } = req.body;
+    const { name, price, stock, category, unit, icon, description, brand, colors, image_url, dimensions, weight, long_description } = req.body;
     const result = await pool.query(
-      'UPDATE products SET price = COALESCE($1, price), stock = COALESCE($2, stock), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-      [price, stock, req.params.id]
+      `UPDATE products SET
+        name = COALESCE($1, name),
+        price = COALESCE($2, price),
+        stock = COALESCE($3, stock),
+        category = COALESCE($4, category),
+        unit = COALESCE($5, unit),
+        icon = COALESCE($6, icon),
+        description = COALESCE($7, description),
+        brand = COALESCE($8, brand),
+        colors = COALESCE($9, colors),
+        image_url = COALESCE($10, image_url),
+        dimensions = COALESCE($11, dimensions),
+        weight = COALESCE($12, weight),
+        long_description = COALESCE($13, long_description),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $14 RETURNING *`,
+      [name, price, stock, category, unit, icon, description, brand, colors, image_url, dimensions, weight, long_description, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Produit non trouve' });
     res.json(result.rows[0]);
@@ -347,6 +394,17 @@ app.patch('/api/admin/products/:id', verifyToken, isAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.delete('/api/admin/products/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Produit non trouve' });
+    res.json({ message: 'Produit supprime' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ============ START ============
 const PORT = process.env.PORT || 5000;
